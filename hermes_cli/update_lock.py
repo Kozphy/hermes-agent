@@ -9,6 +9,7 @@ Format and location are byte-compatible with both readers.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import time
 from contextlib import suppress
@@ -17,9 +18,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Keep in sync with UPDATE_MARKER_MAX_AGE_MS in apps/desktop/electron/update-marker.ts:
-# a shorter ceiling here would let Python steal a lock Electron still considers live.
-# A full update (git pull + uv sync + desktop rebuild) is minutes.
+# Desktop's legacy age ceiling, retained for callers. Python never reclaims a live
+# owner solely because it crosses this threshold: product builds can take longer.
 UPDATE_MARKER_MAX_AGE_SECONDS = 20 * 60
 
 MARKER_NAME = ".hermes-update-in-progress"
@@ -52,17 +52,19 @@ def _pid_alive(pid: int) -> bool:
 
     Delegates to :func:`gateway.status._pid_exists`. Do NOT hand-roll ``os.kill(pid, 0)``: on
     Windows CPython routes ``sig=0`` to ``GenerateConsoleCtrlEvent``, which Ctrl+C's the
-    target's whole console process group (bpo-14484). Any pid we cannot evaluate counts as
-    dead so a corrupt marker never wedges the lock.
+    target's whole console process group (bpo-14484). An inconclusive probe must preserve
+    the marker: it is not evidence that its owner exited.
     """
     if pid <= 0:
         return False
     try:
         from gateway.status import _pid_exists
         return bool(_pid_exists(pid))
+    except (OverflowError, ValueError):
+        return False
     except Exception as exc:
         logger.debug("Could not probe pid %s: %s", pid, exc)
-        return False
+        return True
 
 
 def _handoff_pid() -> int | None:
@@ -103,9 +105,8 @@ class UpdateHolder:
 def read_live_update(*, path: Path | None = None) -> UpdateHolder | None:
     """Return the live update holding the lock, or ``None``.
 
-    Mirrors ``readLiveUpdateMarker`` in ``electron/update-marker.ts``: absent, unreadable,
-    malformed, dead-pid, and past-the-ceiling all mean "no live update", and a stale marker
-    file is deleted so it can't strand future runs. Never raises.
+    An exited owner permits reclamation. Elapsed time alone never proves that an update
+    stopped; a slow build must keep its marker, even past the desktop age ceiling.
     """
     marker = path or update_marker_path()
     try:
@@ -122,11 +123,11 @@ def read_live_update(*, path: Path | None = None) -> UpdateHolder | None:
         started_at = float("-inf")
 
     age = time.time() - started_at
-    if not _pid_alive(pid) or age > UPDATE_MARKER_MAX_AGE_SECONDS:
+    if not _pid_alive(pid):
         with suppress(OSError):
             marker.unlink()
         return None
-    return UpdateHolder(pid=pid, age_seconds=age)
+    return UpdateHolder(pid=pid, age_seconds=age if math.isfinite(age) else 0)
 
 
 def describe_holder(holder: UpdateHolder) -> str:

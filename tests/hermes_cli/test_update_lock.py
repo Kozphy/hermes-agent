@@ -112,13 +112,26 @@ def test_dead_owner_is_reclaimed_not_honored(marker):
     assert int(marker.read_text(encoding="utf-8").splitlines()[0]) == os.getpid()
 
 
-def test_owner_past_the_age_ceiling_is_reclaimed(marker):
-    """A live-but-wedged updater must not hold the lock forever."""
+def test_owner_past_the_age_ceiling_is_preserved(marker):
+    """A slow build is still active; elapsed time cannot authorize deletion."""
     long_ago = int(time.time()) - UPDATE_MARKER_MAX_AGE_SECONDS - 60
     marker.write_text(f"{os.getpid()}\n{long_ago}\n", encoding="utf-8")
 
     lock = UpdateLock(path=marker)
-    assert lock.acquire() is True
+    before = marker.read_bytes()
+    assert lock.acquire() is False
+    assert marker.read_bytes() == before
+
+
+def test_inconclusive_pid_probe_preserves_marker(marker, monkeypatch):
+    def denied(_pid):
+        raise PermissionError("process inventory unavailable")
+
+    monkeypatch.setattr("gateway.status._pid_exists", denied)
+    marker.write_text(f"{os.getpid()}\n{int(time.time())}\n", encoding="utf-8")
+    before = marker.read_bytes()
+    assert UpdateLock(path=marker).acquire() is False
+    assert marker.read_bytes() == before
 
 
 @pytest.mark.parametrize(

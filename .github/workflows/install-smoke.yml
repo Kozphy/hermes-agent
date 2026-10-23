@@ -1,0 +1,76 @@
+name: Installation smoke
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/install.sh'
+      - 'scripts/install.ps1'
+      - 'scripts/ci/test_install_ps1_cli_launchers.ps1'
+      - 'scripts/ci/install_smoke.py'
+      - 'hermes_cli/**'
+      - 'tests/hermes_cli/test_install_workflow_smoke.py'
+      - 'tests/hermes_cli/test_gitlock_probe_safety.py'
+      - 'tests/hermes_cli/test_update_lock.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'package*.json'
+      - 'ui-tui/**'
+      - 'web/**'
+      - 'apps/shared/**'
+      - '.github/workflows/install-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-launchers:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Exercise installer launcher function with pwsh 7
+        shell: pwsh
+        run: ./scripts/ci/test_install_ps1_cli_launchers.ps1
+      - name: Exercise installer launcher function with Windows PowerShell 5.1
+        shell: powershell
+        run: ./scripts/ci/test_install_ps1_cli_launchers.ps1
+
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      UV_PROJECT_ENVIRONMENT: venv
+      HERMES_HOME: ${{ github.workspace }}/../hermes-smoke-home
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # 8.2.0
+        with:
+          version: '0.9.28'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.18.0'
+      - name: Use npm compatible with the repository engine policy
+        run: npm install --global npm@11.17.0 --no-audit --no-fund
+      - name: Install locked Python environment and verify dependency graph
+        run: |
+          uv sync --locked --python 3.11 --extra dev
+          uv pip check --python venv/bin/python
+      - name: Exercise launcher, watchdog, and stale-lock safety
+        run: |
+          bash scripts/run_tests.sh -j 2 --file-retries 0 \
+            tests/hermes_cli/test_install_workflow_smoke.py \
+            tests/hermes_cli/test_gitlock_probe_safety.py \
+            tests/hermes_cli/test_update_lock.py \
+            tests/hermes_cli/test_gitlock_tmp_packs.py
+      - name: Build products from the npm lockfile
+        run: |
+          npm ci --workspace ui-tui --workspace web --include-workspace-root
+          npm run build --workspace ui-tui
+          npm run build --workspace web
+      - name: Stage real public launchers and check installed products
+        run: |
+          HOME="$(mktemp -d)"
+          export HOME
+          bash scripts/install.sh --stage path --dir "$GITHUB_WORKSPACE" --non-interactive
+          venv/bin/python scripts/ci/install_smoke.py --root "$GITHUB_WORKSPACE" --bin-dir "$HOME/.local/bin"
