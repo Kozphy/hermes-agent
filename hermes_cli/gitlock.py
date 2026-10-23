@@ -29,19 +29,20 @@ _TMP_PACK_PREFIXES = ("tmp_pack_", "tmp_idx_", "tmp_rev_", "tmp_mtimes_")
 def _git_proc_running() -> bool:
     """True when a ``git`` process is running — the check that stops us yanking a lock a live fetch holds.
 
-    A failed probe logs and returns False; the age floor in the sweep still applies.
+    A failed probe preserves locks: age alone cannot prove that a writer exited.
     """
     try:
         if os.name == "nt":
             proc = subprocess.run(["tasklist", "/FI", "IMAGENAME eq git.exe", "/FO", "CSV"],
                                   capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
-            return "git.exe" in proc.stdout.lower()
+            return proc.returncode != 0 or "git.exe" in proc.stdout.lower()
         proc = subprocess.run(["pgrep", "-x", "git"], capture_output=True, text=True, encoding="utf-8", errors="replace",
                               timeout=10)
-        return proc.returncode == 0
+        # pgrep: 1 means no match; 2/3 mean a failed probe, not a dead writer.
+        return proc.returncode != 1
     except Exception:
-        logger.debug("git process probe failed; assuming no git running", exc_info=True)
-        return False
+        logger.debug("git process probe failed; preserving locks", exc_info=True)
+        return True
 
 
 def _sweep_stale(directory: Path, candidates: Callable[[], Iterable[Path]], *, min_age_seconds: Optional[int],
