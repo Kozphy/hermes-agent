@@ -1,0 +1,38 @@
+tests/hermes_cli/test_gitlock_probe_safety.py
+  s_b7ae7dfd2f0748::t_f14e8b28826124 1-48
+scripts/ci/install_smoke.py
+  s_b7ae7dfd2f0748::t_dcef58733f477c 83-84
+  s_b7ae7dfd2f0748::t_68c683e7709dfa 1-51,54-62,66-82,85-104
+  s_b7ae7dfd2f0748::t_1bbf1aafc6a821 52-53,63-65
+tests/hermes_cli/test_install_workflow_smoke.py
+  s_b7ae7dfd2f0748::t_f14e8b28826124 1-12,14-69
+  s_b7ae7dfd2f0748::t_2ad8fc12b5d273 13,70-87
+hermes_cli/gitlock.py
+  s_b7ae7dfd2f0748::t_68c683e7709dfa 32,38,41-42,44-45
+.github/workflows/install-smoke.yml
+  s_b7ae7dfd2f0748::t_fbdc7e60591bed 32-33,35-37,44,73-74
+  s_b7ae7dfd2f0748::t_f2cb55327320df 7-8,27-31,34,38
+  s_b7ae7dfd2f0748::t_f14e8b28826124 1-6,9-26,39-43,45-51,55-72,75-76
+  s_b7ae7dfd2f0748::t_d45487bf3a7465 52-54
+tests/hermes_cli/test_update_lock.py
+  s_b7ae7dfd2f0748::t_68c683e7709dfa 115-116,121-134
+hermes_cli/update_lock.py
+  s_b7ae7dfd2f0748::t_68c683e7709dfa 55-56,63-64,67,108-109,126
+  s_b7ae7dfd2f0748::t_1bbf1aafc6a821 12,21-22,130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f145f0b173ac1884a9803af5d7bead3d4ce40dfa",
+  "prompts": {},
+  "sessions": {
+    "s_b7ae7dfd2f0748": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16971-e872-7873-86fa-bb3c4864fa81",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Zixsa <50504962+Kozphy@users.noreply.github.com>"
+    }
+  }
+}
